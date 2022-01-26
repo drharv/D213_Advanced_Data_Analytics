@@ -1,0 +1,371 @@
+---
+title: "D213 Task 1 - Time Series Modeling"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<br />David Harvell
+<br />Master of Science, Data Analytics
+<br />October 2021
+<br /><br />
+
+#### <span style="color:blue;">A-1.  Summarize one research question that is relevant to a real-world organizational situation captured in the selected data set.</span>
+
+<br />
+Time series analysis allows us to determine the type of trends and variance that are occurring in a dataset over time.  Revealing these attributes can help us generate predictions and understand the accuracy of those predictions.  Researchers can use predictions from time series analysis to predict profits, understand supply chain issues, reallocate resources for upcoming shifts in demand, and aid in countless other predictive applications. 
+<br /><br />
+The dataset we are examining today contains revenue by day for a telecom company.  **Can we predict the future revenue trends for this company?** Answering this question will be the goal of this analysis.
+<br /><br />
+
+#### <span style="color:blue;">A-2.  Define the objectives or goals of the data analysis.</span>
+
+<br />
+**Our primary goal is to predict the future revenue trends for the telecom company.**  This will allow the company to adequately plan for expansions (or reductions) and be prepared for the most likely scenarios.
+<br /><br />
+
+#### <span style="color:blue;">B-1.  Summarize the assumptions of a time series model including stationarity and autocorrelated data.</span>
+
+<br />
+The most simple assumption for time series data is that data is collected at evenly spaced increments over a period of time (Peixeiro, 2021).  This could include datapoints for each hour, day, week, month, year, or other increment of time.  Time series models can also include both stationarity and autocorrelation assumpations.
+<br /><br />
+**Stationarity assumes that the points do not exhibit a trend.** This can be validated by making sure the mean and variance do not vary across time (Wu, 2021).  If a series is initially non-stationary, we can sometimes derive a stationary dataset using the difference or log of the data.  If seasonality is present, we can also work to remove seasonal trends.
+<br /><br />
+**Autocorrelation assume that each data point has similarity to a previous point at a set interval (Peixeiro, 2021).**  This could be the point directly preceding or any other set interval - i.e. every 12 months for seasonal data.
+<br /><br />
+
+#### <span style="color:blue;">C-1.  Provide a line graph visualizing the realization of the time series.</span>
+
+<br />
+```{r}
+data <- read.csv("teleco_time_series.csv")
+head(data, 5)
+```
+```{r}
+plot(data, type="l")
+```
+<br /><br />
+
+#### <span style="color:blue;">C-2.  Describe the time step formatting of the realization, including any gaps in measurement and the length of the sequence.</span>
+<br />
+**Missing Values**
+
+<br />
+To begin analysis on the data, we will check for missing points.  We will first check the final 5 rows to see if the day counter matches the row counter.
+<br />
+
+```{r}
+tail(data, 5)
+```
+
+<br />
+**Duplicate Values**
+<br />
+The final few day counters check out.  Next we will check for duplicate entries for a single day.
+<br />
+
+```{r}
+data[duplicated(data['Day'])]
+```
+
+<br />
+Since no values were returned in our validation, we can continue with confidence that the series is continuous without duplicates or missing values.
+<br /><br />
+
+#### <span style="color:blue;">C-3.  Evaluate the stationarity of the time series.</span>
+
+<br />
+We will use the Augmented Dickey-Fuller test in order to check for stationarity.  A basic view of the data would suggest that it doesn't have a consistent mean over time, and we should be able to confirm with an ADF test.  We will use a lag order of 20, as to err on the side of a larger number.
+<br />
+
+```{r}
+library(tseries)
+
+xt <- ts(data['Revenue'], frequency=7, start=c(2000,1))
+options(warn=-1)  #Hide errors for low P-values
+adf.test(xt, k=20)
+```
+
+<br />
+Since the p-value is greater than 0.05, we fail to reject the null hypothesis and determine this data is non-stationary.  Since it doesn't appear to grow in magnitude over time, we should be able to use the difference in values for our analysis.
+<br />
+
+```{r}
+d_xt <- diff(xt)
+options(warn=-1)  #Hide errors for low P-values
+adf.test(d_xt, k=20)
+```
+
+<br />
+Now our p-value is well under 0.05, so we can reject the null hypothesis and determine that our data is now stationary.
+<br /><br />
+
+#### <span style="color:blue;">C-4.  Explain the steps used to prepare the data for analysis, including the training and test set split.</span>
+
+<br />
+We will split the data into training and testing sets by allocating the first 60% of records to the training set, and all remaining to the testing set.
+<br />
+
+```{r}
+
+library("TSstudio")
+split <- ts_split(xt, sample.out = round(length(xt) * 0.4))
+train <- split$train
+test <- split$test
+length(train)
+length(test)
+```
+```{r}
+plot(xt)
+lines(train, col="blue")
+lines(test, col="orange")
+```
+
+<br />
+After the split, we have a training set with 439 records and a testing set with 292 records.
+<br /><br />
+
+#### <span style="color:blue;">C-5.  Provide a copy of the cleaned dataset.</span>
+
+<br />
+Next, we will export the cleaned time series so that it can be uploaded with the paper.
+<br />
+
+```{r}
+write.csv(xt, "cleaned_time_series.csv")
+```
+
+<br /><br />
+
+#### <span style="color:blue;">D-1.  Report the annotated findings with visualizations of your data analysis, including the following elements:</span>
+* <span style="color:blue;">the presence or lack of a seasonal component</span>
+* <span style="color:blue;">trends</span>
+* <span style="color:blue;">auto correlation function</span>
+* <span style="color:blue;">spectral density</span>
+* <span style="color:blue;">the decomposed time series</span>
+* <span style="color:blue;">confirmation of the lack of trends in the residuals of the decomposed series</span>
+
+<br />
+Let us now review the decomposed versions of the dataset to review seasonality, trends, and noise.
+<br />
+
+```{r}
+decomp <- decompose(xt)
+```
+<br />
+**1. Seasonality**
+<br />
+```{r}
+plot(head(decomp$seasonal, 70), type="l")
+```
+<br />
+**There does appear to be a seasonal component when we view the data with a weekly frequency.** This would indicate that each day sees similar sales week over week when the trend and noise data is removed.
+<br />
+```{r}
+plot(head(decomp$seasonal,7), type="l")
+```
+<br />
+By viewing a single week, we can see that the 1st and 6th days of each week see a surge in revenue.
+<br /><br />
+**2. Trends**
+<br />
+
+```{r}
+plot(decomp$trend)
+```
+<br />
+The chart above displays the trend over time.  It appears to be **an additive trend - growing over time at a steady pace**, without exponential components.
+<br /><br />
+**3. Auto-Correlation**
+<br />
+```{r}
+acf(xt)
+```
+<br />
+Our data appears to have high auto-correlation for all lags.  The first 4 weeks of data is charted above, and all correlations are over 0.6, with many above 0.8.
+<br /><br />
+
+**4. Spectral Density**
+
+<br />
+The spectral density can be estimated using on object known as a periodogram, which is the squared correlation between our time series and sine/cosine waves at the different frequencies spanned by the series (Jones, 2018).  **Our spectral density is visualized below.**
+<br />
+```{r}
+spectrum(xt)
+```
+<br /><br />
+
+**5. Decomposition**
+<br />
+Now we can view the full decomposition of our time series.
+<br />
+```{r}
+plot(decomp)
+```
+<br /><br />
+
+**6. Lack of Trends in Residuals**
+<br />
+The residuals (white noise) component in our data shows no noticeable trend.
+<br />
+```{r}
+plot(decomp$random)
+```
+<br /><br />
+
+#### <span style="color:blue;">D-2.  Identify an autoregressive integrated moving average (ARIMA) model that takes into account the observed trend and seasonality of the time series data.</span>
+
+<br />
+To begin the model selection, we will call auto.arima with our train data and set the Seasonal flag.
+<br />
+```{r}
+library(forecast)
+train_days = as.matrix(head(data['Day'], length(train)))
+
+#Using Auto Arima with D=1 to force seasonality
+fitted <- auto.arima(train, D=1, stepwise=TRUE, seasonal=TRUE, trace=TRUE)
+```
+<br />
+Now we can review the selected model.
+<br />
+```{r}
+fitted
+```
+<br /><br />
+
+#### <span style="color:blue;">D-3.  Perform a forecast using the derived ARIMA model.</span>
+
+<br />
+Next, we will perform a forecast with the model and compare it against the actual values.  Green will hold the actual predictions, while red will be our forecast.
+<br />
+
+```{r}
+library(astsa)
+test_forecast <- sarima.for(train, n.ahead=length(test), 2, 0, 0, 2, 1, 0, 7)
+lines(test, col="green")
+```
+<br />
+We can also predict into the future from our full dataset.  Below we will predict 1 month into the future.
+<br />
+```{r}
+month_forecast <- sarima.for(xt, 31, 2, 0, 0, 2, 1, 0, 7)
+```
+<br /><br />
+
+#### <span style="color:blue;">D-4.  Provide the output and calculations of the analysis you performed.</span>
+
+<br />
+The code and formulas are listed above. Below is the comparison of the test data and it's predictions.  I have limited to the first 20 records.
+<br />
+```{r}
+result <- cbind(data.frame(Prediction=test_forecast$pred), data.frame(Revenue=test))
+result <- cbind(result, result['Prediction'] - result['Revenue'])
+colnames(result) <- c("Prediction", "Actual", "Difference")
+head(result, 20)
+```
+<br /><br />
+
+#### <span style="color:blue;">D-5.  Provide the code used to support the implementation of the time series model.</span>
+
+<br />
+All code is included inline above.
+<br /><br />
+
+#### <span style="color:blue;">E-1.  Discuss the results of your data analysis, including the following:</span>
+* <span style="color:blue;">the selection of an ARIMA model</span>
+* <span style="color:blue;">the prediction interval of the forecast</span>
+* <span style="color:blue;">a justification of the forecast length</span>
+* <span style="color:blue;">the model evaluation procedure and error metric</span>
+
+<br />
+**1. Model Selection**
+<br/>
+We used the auto.arima function to select the best model parameters, and used sarima to handle the seasonal components of this model.  Selection arrived at the following model:
+```{r}
+sarima(train, 2, 0, 0, 2, 1, 0, 7)
+```
+<br /><br />
+
+**2. Prediction Interval**
+<br />
+```{r}
+#First prediction
+test_forecast$pred[1]
+#1.96 Standard deviations above and below (using standard error)
+test_forecast$pred[1] - (1.96 * test_forecast$se[1])
+test_forecast$pred[1] + (1.96 * test_forecast$se[1])
+```
+<br />
+We can derive the confidence interval by using the standard errors returns in the predicitons.  **For the first predicted point of 12.1331, we find that the confidence interval at 98% is between 11.082 and 13.184.**  See calculations above.
+<br /><br />
+
+**3. Forecast Length**
+<br />
+```{r}
+month_forecast$pred[31] - (1.96 * month_forecast$se[31])
+month_forecast$pred[31] + (1.96 * month_forecast$se[31])
+```
+<br />
+Since this model starts opening up on the range of confidence intervals pretty quickly, I decided to limit the prediction to one month.  That already puts the prediction in a range of 12.925 to 21.186, which will not be very helpful in planning fiscal endeavors.
+<br /><br />
+
+**4. Forecast Evaluation**
+<br />
+```{r}
+library(Metrics)
+mse(test_forecast$pred, test)
+rmse(test_forecast$pred, test)
+```
+<br />
+Our model is not very trustworthy in its current state.  The RMSE of 4.29 is rather large considering the values are currently under 15.
+<br /><br />
+
+#### <span style="color:blue;">E-2.  Provide an annotated visualization of the forecast of the final model compared to the test set.</span>
+<br />
+```{r}
+Revenue<-train
+pass <- sarima.for(Revenue, n.ahead=length(test), 2, 0, 0, 2, 1, 0, 7, plot.all=TRUE)
+lines(test, col="green", ylab="Revenue")
+text(x=2050, y=33, pos=4, "PAST")
+text(x=2050, y=30, pos=4, "(train)")
+text(2064, y=33, pos=4, "FUTURE")
+text(2064, y=30, pos=4, "(test)")
+text(1995, y=33, pos=4, "Red=Predictions", col="red")
+text(1995, y=30, pos=4, "Green=Actuals", col="green")
+abline(v=2000 + (length(train)/7), lty=2, col=4)
+
+?text()
+```
+<br /><br />
+
+#### <span style="color:blue;">E-3.  Recommend a course of action based on your results.</span>
+<br />
+Since our confidence interval was relatively wide, I would not recommend any large change in current investments or plans based on this model.  I would expect slight growth and make sure the company is prepared to increase customer and employee counts, but this model is not accurate enough to dictate a severe change in resource or investment allocations.
+<br /><br />
+
+#### <span style="color:blue;">Appendix I:  Code References</span>
+<br/>
+Identify and Remove Duplicate Data in R. (2018, October 19). Datanovia. Retrieved November 29, 2021, from https://www.datanovia.com/en/lessons/identify-and-remove-duplicate-data-in-r/
+<br /><br />
+RPubs - Time series in R: Stationarity testing. (2017, April 21). RPubs. Retrieved November 30, 2021, from https://rpubs.com/richkt/269797
+<br /><br />
+Time series seasonality test. (2018, May 16). Cross Validated. Retrieved November 30, 2021, from https://stats.stackexchange.com/questions/346497/time-series-seasonality-test
+<br /><br />
+R.C.K. (2020, January 21). Split Time Series Object for Training and Testing Partitions. Rdrr.Io. Retrieved November 30, 2021, from https://rdrr.io/cran/TSstudio/man/ts_split.html
+<br /><br />
+auto.arima function - RDocumentation. (n.d.). RDocumentation. Retrieved December 1, 2021, from https://www.rdocumentation.org/packages/forecast/versions/8.15/topics/auto.arima
+<br /><br />
+Poison, N. (n.d.). astsa/fun_with_astsa.md at master · nickpoison/astsa. GitHub. Retrieved December 1, 2021, from https://github.com/nickpoison/astsa/blob/master/fun_with_astsa/fun_with_astsa.md#2-plotting
+<br /><br />
+
+#### <span style="color:blue;">Appendix II:  Citations</span>
+<br />
+Peixeiro, M. (2021, October 20). The Complete Guide to Time Series Analysis and Forecasting. Medium. Retrieved November 29, 2021, from https://towardsdatascience.com/the-complete-guide-to-time-series-analysis-and-forecasting-70d476bfe775
+<br /><br />
+Wu, S. (2021, July 4). Stationarity Assumption in Time Series Data - Towards Data Science. Medium. Retrieved November 29, 2021, from https://towardsdatascience.com/stationarity-assumption-in-time-series-data-67ec93d0f2f
+<br /><br />
+Jones, J. H. (2018, February 19). Time Series and Spectral Analysis. Stanford. Retrieved November 30, 2021, from http://web.stanford.edu/class/earthsys214/notes/series.html
+<br /><br />
+
